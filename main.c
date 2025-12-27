@@ -61,10 +61,10 @@ static void apply_zoom(struct wooz_window *win, double zoom_change,
   double dx = center_x / (double)win->output->logical_geometry.width;
   double dy = center_y / (double)win->output->logical_geometry.height;
 
-  win->view_source.x += scroll * ratio * dx;
-  win->view_source.width -= scroll * ratio;
-  win->view_source.y += scroll * dy;
-  win->view_source.height -= scroll;
+  win->view_source.x += round(scroll * ratio * dx);
+  win->view_source.width -= round(scroll * ratio);
+  win->view_source.y += round(scroll * dy);
+  win->view_source.height -= round(scroll);
 }
 
 static void render_window(struct wooz_window *win) {
@@ -349,7 +349,7 @@ static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
     double center_y = win->output->logical_geometry.height / 2.0;
     double zoom_pixels =
         win->output->geometry.height * win->state->config.initial_zoom;
-    apply_zoom(win, -zoom_pixels, center_x, center_y);
+    apply_zoom(win, zoom_pixels, center_x, center_y);
     render_window(win);
     win->initial_zoom_applied = true;
     return; // render_window already calls wl_surface_commit
