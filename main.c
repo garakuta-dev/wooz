@@ -480,21 +480,36 @@ static const struct xdg_toplevel_listener xdg_toplevel_listener = {
     .wm_capabilities = xdg_toplevel_wm_capabilities,
 };
 
+static struct wooz_window *
+focus_window_for_surface(struct wooz_state *state, struct wl_surface *surface) {
+  struct wooz_window *focused = NULL;
+  struct wooz_window *window;
+
+  wl_list_for_each(window, &state->windows, link) {
+    if (window->surface == surface) {
+      focused = window;
+      window->is_focused = true;
+    } else {
+      window->is_focused = false;
+    }
+  }
+
+  if (focused != NULL) {
+    state->focused = focused;
+  }
+
+  return focused;
+}
+
 static void pointer_handle_enter(void *data, struct wl_pointer *pointer,
                                  uint32_t serial, struct wl_surface *surface,
                                  wl_fixed_t sx, wl_fixed_t sy) {
   struct wooz_state *state = data;
+  struct wooz_window *window = focus_window_for_surface(state, surface);
 
-  struct wooz_window *window;
-  wl_list_for_each(window, &state->windows, link) {
-    if (window->surface == surface) {
-      window->is_focused = true;
-      state->focused = window;
-      window->pointer_x = wl_fixed_to_double(sx);
-      window->pointer_y = wl_fixed_to_double(sy);
-    } else {
-      window->is_focused = false;
-    }
+  if (window != NULL) {
+    window->pointer_x = wl_fixed_to_double(sx);
+    window->pointer_y = wl_fixed_to_double(sy);
   }
 }
 
@@ -615,12 +630,19 @@ static void keyboard_handle_keymap(void *data, struct wl_keyboard *keyboard,
 static void keyboard_handle_enter(void *data, struct wl_keyboard *keyboard,
                                   uint32_t serial, struct wl_surface *surface,
                                   struct wl_array *keys) {
-  // No-op
+  struct wooz_state *state = data;
+  focus_window_for_surface(state, surface);
 }
 
 static void keyboard_handle_leave(void *data, struct wl_keyboard *keyboard,
                                   uint32_t serial, struct wl_surface *surface) {
-  // No-op
+  struct wooz_state *state = data;
+
+  if (state->focused != NULL && state->focused->surface == surface) {
+    state->focused->is_focused = false;
+    state->focused = NULL;
+  }
+  stop_key_repeat(state);
 }
 
 static void keyboard_handle_key(void *data, struct wl_keyboard *keyboard,
@@ -628,10 +650,6 @@ static void keyboard_handle_key(void *data, struct wl_keyboard *keyboard,
                                 uint32_t key_state) {
   struct wooz_state *state = data;
   struct wooz_window *win = state->focused;
-
-  if (win == NULL) {
-    return;
-  }
 
   if (key_state == WL_KEYBOARD_KEY_STATE_RELEASED) {
     // Stop key repeat when any key is released
@@ -654,7 +672,13 @@ static void keyboard_handle_key(void *data, struct wl_keyboard *keyboard,
       state->n_done = 0;
     }
     break;
+  }
 
+  if (win == NULL) {
+    return;
+  }
+
+  switch (key) {
   case KEY_0:
   case KEY_KP0:
     // Restore/unzoom
